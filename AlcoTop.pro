@@ -2,12 +2,12 @@ EAGLE AutoRouter Statistics:
 
 Job           : /Users/dshanaghy/Projects/AlcoTop/AlcoTop.brd
 
-Start at      : 18:12:25 (11/28/12)
-End at        : 18:12:26 (11/28/12)
+Start at      : 01:10:22 (12/5/12)
+End at        : 01:10:23 (12/5/12)
 Elapsed time  : 00:00:01
 
-Signals       :    31   RoutingGrid: 12 mil  Layers: 2
-Connections   :    46   predefined:  46 ( 0 Vias )
+Signals       :    34   RoutingGrid: 12 mil  Layers: 2
+Connections   :    52   predefined:  28 ( 0 Vias )
 
 Router memory :   143136
 
@@ -18,8 +18,8 @@ Number of Ripups  :         0         0         0         0         0
 max. Level        :         0         0         0         0         0
 max. Total        :         0         0         0         0         0
 
-Routed            :         0         0         0         0         0
-Vias              :         0         0         0         0         0
+Routed            :        24        24        24        24        24
+Vias              :        10         4         5         5         5
 Resolution        :   100.0 %   100.0 %   100.0 %   100.0 %   100.0 %
 
 Final             : 100.0% finished

@@ -3,17 +3,25 @@
 #include <TimerOne.h>
 #include "LPD6803.h"
 
+#define DBG 0
+
 #define T_TOTAL 500
 #define N_PIXELS 20
 
 #define ALCO_MIN 400
-#define NOT_ALCO Color(0,0,0)
-#define MQ3_MAX 850
-#define MODE_MAX 3
+#define MQ3_MAX 1023
 #define DOUBLE_CLICK 1000
+#define ALCO_HEATUP 7500
+#define ALCO_HEATUP_STEP ALCO_HEATUP / N_PIXELS
+
+#define MODE_RANDOM 0
+#define MODE_ALCO 1
+#define MODE_RAINBOW 2
+#define MODE_RAINBOWCYCLE 3
+#define MODE_MAX 4
 
 //Number of bits used to represent a color
-#define COLOR_BITS 5
+#define COLOR_BITS 4
 //Number of color values of a single color
 #define NUM_COLORS (1 << COLOR_BITS)
 //Max color value 0 indexed
@@ -24,6 +32,20 @@
 //Slows down the rainbow when there are more bits in the colors
 #define RAINBOW_SPEED 100 + ((5 - COLOR_BITS) * 25) 
 #define RANDOM_SPEED 150
+#define GO_ALCO_SPEED 25
+
+// Some colors
+#define COLOR_OFF Color(0, 0, 0)
+#define COLOR_ALCO_WAIT Color(MAX_COLOR, 0, 0)
+#define COLOR_ALCO_GO Color(0, 0, MAX_COLOR)
+
+//IO Pins
+#define INDICATOR_LED 7
+#define ALCO_BJT 12
+#define ALCO_SENSOR A0
+#define B_MODE A5
+#define UNCONNECTED_ANALOG A3
+
 
 // Choose which 2 pins you will use for output.
 // Can be any valid output pins.
@@ -36,16 +58,27 @@ int clockPin = 3;      // 'green' wire
 LPD6803 strip = LPD6803(N_PIXELS, dataPin, clockPin);
 int alcoColors[N_PIXELS] = {0};
 
-boolean isAlco = false;
-Bounce bMode = Bounce(9, 5);
+boolean bIsAlco = false;
+boolean bReadAlco = false;
+Bounce bMode = Bounce(B_MODE, 5);
 uint8_t mode = 0;
 uint32_t bLast = 0;
 uint32_t tDouble = 0;
+uint32_t tChangeMode = 0;
 uint8_t j = 0;
 
-void setup() {  
-  Serial.begin(115200);
-  
+void setup() {
+//#if DBG  
+//  Serial.begin(115200);
+//  Serial.println("AlcoTop welcomes u, merry drinking!");
+//  Serial.println("===================================");
+//  Serial.println("       IMPORTANT SETTINGS          ");
+//  Serial.println("===================================");
+//  Serial.print("ALCO_MIN: "); Serial.println(ALCO_MIN);
+//  Serial.print("DOUBLE_CLICK: "); Serial.println(DOUBLE_CLICK);
+//  Serial.print("MAX_COLOR: "); Serial.println(MAX_COLOR);
+//#endif
+
   // The Arduino needs to clock out the data to the pixels
   // this happens in interrupt timer 1, we can change how often
   // to call the interrupt. setting CPUmax to 100 will take nearly all all the
@@ -60,15 +93,14 @@ void setup() {
   calcAlcoColors();
   stripOff();
   
-  pinMode(7, OUTPUT); 
-  pinMode(10, OUTPUT); 
-  pinMode(9, INPUT); 
-  pinMode(A0, INPUT); 
-  pinMode(A5, INPUT); 
+  pinMode(INDICATOR_LED, OUTPUT); 
+  pinMode(ALCO_BJT, OUTPUT); 
+  pinMode(ALCO_SENSOR, INPUT); 
+  pinMode(B_MODE, INPUT); 
 
-  digitalWrite(10, HIGH);
+  (mode == MODE_ALCO) ? goAlco() : stopAlco();
 
-  randomSeed(analogRead(A5));
+  randomSeed(analogRead(UNCONNECTED_ANALOG));
   
   for ( int i=0; i<strip.numPixels(); i++ )
     randomStrip(0, i);
@@ -76,35 +108,31 @@ void setup() {
 
 
 void loop() {
-//  bMode.update();
-//  int bRead = bMode.read();
-//  // Turns on the alco sensor if the button is held down
-//  digitalWrite(10, bRead);
-    
-//  int alco = 0;
-//  if ( bRead == HIGH )
-    int alco = readAlco();
+  int alco = bReadAlco ? readAlco() : 0;
   
   if ( alco < ALCO_MIN ) {
-    if ( isAlco ) {
-      digitalWrite(7, LOW);
+    if ( bIsAlco ) {
+      digitalWrite(INDICATOR_LED, LOW);
+      colorWipe(COLOR_ALCO_GO, GO_ALCO_SPEED, -1, -1, true);
     }
     loopMode();
-    isAlco = false;
+    bIsAlco = false;
   }
   else {
-    if ( ! isAlco ) {
-      colorWipe(NOT_ALCO, 0);      
-      digitalWrite(7, HIGH);
+    if ( ! bIsAlco ) {
+      digitalWrite(INDICATOR_LED, HIGH);
+      colorWipe(COLOR_OFF, GO_ALCO_SPEED, -1, -1, false);
     }
     int h = map(alco, 0, MQ3_MAX, 5, 20);
-    doAlco(h);
-    isAlco = true;
+    doAlco(h);    
+    bIsAlco = true;
   }
 }
 
 void loopMode() {
   bMode.update ();
+  uint8_t oldMode = mode;
+  
   int bRead = bMode.read();
   
   if (bRead == LOW && bLast == HIGH) {
@@ -112,31 +140,72 @@ void loopMode() {
     if ( millis() - tDouble < DOUBLE_CLICK ) { 
       // If this is the second click since 
       // DOUBLE_CLICK ms ago, change mode.
-      Serial.println("Second click");
       mode = ++mode % MODE_MAX;    
-      Serial.print("mode=");
-      Serial.println(mode);
+//#if DBG
+//  Serial.print("Mode chnaged to ");
+//  Serial.println(mode);
+//#endif
       tDouble = 0;
+      tChangeMode = millis();
     }
     else {
-      Serial.println("Click");
+//#if DBG
+//  Serial.println("Click");
+//#endif
       tDouble = millis();
     }
   }
-  
+
   switch (mode) {
-    case 0:
+    case MODE_RANDOM:
       randomStrip(RANDOM_SPEED, -1);    
+      if ( oldMode != mode )
+        stopAlco();
       break;
-    case 1:
+    case MODE_RAINBOW:
       rainbow(RAINBOW_SPEED);
+      if ( oldMode != mode )
+        stopAlco();
       break;
-    case 2:
+    case MODE_RAINBOWCYCLE:
       rainbowCycle(RAINBOW_SPEED);
+      if ( oldMode != mode )
+        stopAlco();
+      break;
+    case MODE_ALCO:
+      if ( oldMode != mode )
+        goAlco();
+      else if ( ! bReadAlco )
+        checkAlco();
       break;
   }
   
   bLast = bRead;
+}
+
+void goAlco() {
+  colorWipe(COLOR_ALCO_WAIT, 25, -1, -1, true);
+  digitalWrite(ALCO_BJT, HIGH);
+  j = -1;
+}
+
+void checkAlco() {
+  uint32_t elapsed = millis() - tChangeMode;
+  if ( elapsed > ALCO_HEATUP ) {
+    bReadAlco = true;
+  }
+  else {
+    int i = (elapsed / (int)(ALCO_HEATUP / N_PIXELS)) - 1;
+    if ( i != j ) {
+      j = i;
+      colorWipe(COLOR_ALCO_GO, 0, -1, j, true);
+    }
+  }
+}
+
+void stopAlco() {
+  digitalWrite(ALCO_BJT, LOW);
+  bReadAlco = false;
 }
 
 void stripOff() {
@@ -154,9 +223,11 @@ void calcAlcoColors() {
   int16_t c = 0, r = 0, g = MAX_COLOR;
   
   for (int i=0; i < mid; i++) {
-//    Serial.print("i="); Serial.print(i);
-//    Serial.print(", r="); Serial.print(r);
-//    Serial.print(", g="); Serial.println(g);
+//#if DBG    
+//  Serial.print("i="); Serial.print(i);
+//  Serial.print(", r="); Serial.print(r);
+//  Serial.print(", g="); Serial.println(g);
+//#endif
     
     alcoColors[i] = Color(r, g, 0);    
     
@@ -166,9 +237,11 @@ void calcAlcoColors() {
   }
     
   for (int i=mid; i < 20; i++) {
-//    Serial.print("i="); Serial.print(i);
-//    Serial.print(", r="); Serial.print(r);
-//    Serial.print(", g="); Serial.println(g);
+//#if DBG    
+//  Serial.print("i="); Serial.print(i);
+//  Serial.print(", r="); Serial.print(r);
+//  Serial.print(", g="); Serial.println(g);
+//#endif
     
     alcoColors[i] = Color(r, g, 0);    
     
@@ -198,17 +271,19 @@ void alcoUp(int wait, int h) {
 
 void alcoDown(int wait, int h) {
   for (int i=h-1; i >= 0; i--) {
-    strip.setPixelColor(i, NOT_ALCO);
+    strip.setPixelColor(i, COLOR_OFF);
     strip.show();
     delay(wait);
   }
 }
 
 int readAlco() {
-  int a0 = analogRead(A0);
-  Serial.print("A0 = ");
-  Serial.println(a0);
-  return a0;
+  int alco = analogRead(ALCO_SENSOR);
+//#if DBG
+//  Serial.print("alco = ");
+//  Serial.println(alco);
+//#endif
+  return alco;
 }
 
 void randomStrip(int wait, int index) {
@@ -272,16 +347,36 @@ void rainbowCycle(uint8_t wait) {
 
 // fill the dots one after the other with said color
 // good for testing purposes
-void colorWipe(uint16_t c, uint8_t wait) {
-  int i;
+void colorWipe(uint16_t c, uint8_t wait, uint8_t start, uint8_t finish, boolean up) {
+  if ( up ) {
+    if ( start < 0 || start > strip.numPixels() ) 
+      start = 0;
+    if ( finish < 0 || finish > strip.numPixels() ) 
+      finish = strip.numPixels();
   
-  for (i=0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, c);
-      if ( wait > 0 ) {
-        strip.show();
-        delay(wait);
-      }
+    for (int i=start; i < finish; i++) {
+        strip.setPixelColor(i, c);
+        if ( wait > 0 ) {
+          strip.show();
+          delay(wait);
+        }
+    }
   }
+  else {
+    if ( start < 0 || start > strip.numPixels() - 1 )
+      start = strip.numPixels() - 1;
+    if ( finish < 0 || finish > strip.numPixels() - 1 )
+      finish = 0;
+  
+    for (int i=start; i >= finish; i--) {
+        strip.setPixelColor(i, c);
+        if ( wait > 0 ) {
+          strip.show();
+          delay(wait);
+        }
+    }
+  }
+  
   if ( wait == 0 ) {
     strip.show();
   }
