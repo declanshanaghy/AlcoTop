@@ -14,11 +14,15 @@
 #define ALCO_HEATUP 7500
 #define ALCO_HEATUP_STEP ALCO_HEATUP / N_PIXELS
 
+//Even modes are light displays
 #define MODE_RANDOM 0
-#define MODE_ALCO 1
 #define MODE_RAINBOW 2
-#define MODE_RAINBOWCYCLE 3
-#define MODE_MAX 4
+#define MODE_RAINBOWCYCLE 4
+
+//All odd modes turn on the sensor
+#define MODE_ALCO 1
+
+#define MODE_MAX 6
 
 //Number of bits used to represent a color
 #define COLOR_BITS 4
@@ -63,21 +67,20 @@ boolean bReadAlco = false;
 Bounce bMode = Bounce(B_MODE, 5);
 uint8_t mode = 0;
 uint32_t bLast = 0;
-uint32_t tDouble = 0;
 uint32_t tChangeMode = 0;
 uint8_t j = 0;
 
 void setup() {
-//#if DBG  
-//  Serial.begin(115200);
-//  Serial.println("AlcoTop welcomes u, merry drinking!");
-//  Serial.println("===================================");
-//  Serial.println("       IMPORTANT SETTINGS          ");
-//  Serial.println("===================================");
-//  Serial.print("ALCO_MIN: "); Serial.println(ALCO_MIN);
-//  Serial.print("DOUBLE_CLICK: "); Serial.println(DOUBLE_CLICK);
-//  Serial.print("MAX_COLOR: "); Serial.println(MAX_COLOR);
-//#endif
+#if DBG  
+  Serial.begin(115200);
+  Serial.println("AlcoTop welcomes u, merry drinking!");
+  Serial.println("===================================");
+  Serial.println("       IMPORTANT SETTINGS          ");
+  Serial.println("===================================");
+  Serial.print("ALCO_MIN: "); Serial.println(ALCO_MIN);
+  Serial.print("DOUBLE_CLICK: "); Serial.println(DOUBLE_CLICK);
+  Serial.print("MAX_COLOR: "); Serial.println(MAX_COLOR);
+#endif
 
   // The Arduino needs to clock out the data to the pixels
   // this happens in interrupt timer 1, we can change how often
@@ -98,7 +101,7 @@ void setup() {
   pinMode(ALCO_SENSOR, INPUT); 
   pinMode(B_MODE, INPUT); 
 
-  (mode == MODE_ALCO) ? goAlco() : stopAlco();
+  (mode % 2 == 1) ? goAlco() : stopAlco();
 
   randomSeed(analogRead(UNCONNECTED_ANALOG));
   
@@ -137,47 +140,38 @@ void loopMode() {
   
   if (bRead == LOW && bLast == HIGH) {
     // Button was clicked.    
-    if ( millis() - tDouble < DOUBLE_CLICK ) { 
-      // If this is the second click since 
-      // DOUBLE_CLICK ms ago, change mode.
-      mode = ++mode % MODE_MAX;    
-//#if DBG
-//  Serial.print("Mode chnaged to ");
-//  Serial.println(mode);
-//#endif
-      tDouble = 0;
+    mode = ++mode % MODE_MAX;    
+#if DBG
+  Serial.print("Mode chnaged to ");
+  Serial.println(mode);
+#endif
       tChangeMode = millis();
-    }
-    else {
-//#if DBG
-//  Serial.println("Click");
-//#endif
-      tDouble = millis();
-    }
   }
 
-  switch (mode) {
-    case MODE_RANDOM:
-      randomStrip(RANDOM_SPEED, -1);    
-      if ( oldMode != mode )
-        stopAlco();
-      break;
-    case MODE_RAINBOW:
-      rainbow(RAINBOW_SPEED);
-      if ( oldMode != mode )
-        stopAlco();
-      break;
-    case MODE_RAINBOWCYCLE:
-      rainbowCycle(RAINBOW_SPEED);
-      if ( oldMode != mode )
-        stopAlco();
-      break;
-    case MODE_ALCO:
-      if ( oldMode != mode )
-        goAlco();
-      else if ( ! bReadAlco )
-        checkAlco();
-      break;
+  if ( mode % 2 == 1 ) {
+    if ( oldMode != mode )
+      goAlco();
+    else if ( ! bReadAlco )
+      checkAlco();
+  }
+  else {
+    switch (mode) {
+      case MODE_RANDOM:
+        randomStrip(RANDOM_SPEED, -1);    
+        if ( oldMode != mode )
+          stopAlco();
+        break;
+      case MODE_RAINBOW:
+        rainbow(RAINBOW_SPEED);
+        if ( oldMode != mode )
+          stopAlco();
+        break;
+      case MODE_RAINBOWCYCLE:
+        rainbowCycle(RAINBOW_SPEED);
+        if ( oldMode != mode )
+          stopAlco();
+        break;
+    }
   }
   
   bLast = bRead;
@@ -187,18 +181,28 @@ void goAlco() {
   colorWipe(COLOR_ALCO_WAIT, 25, -1, -1, true);
   digitalWrite(ALCO_BJT, HIGH);
   j = -1;
+#if DBG
+  Serial.println("goAlco");
+#endif
 }
 
 void checkAlco() {
   uint32_t elapsed = millis() - tChangeMode;
   if ( elapsed > ALCO_HEATUP ) {
     bReadAlco = true;
+#if DBG
+  Serial.println("bReadAlco = true");
+#endif
   }
   else {
     int i = (elapsed / (int)(ALCO_HEATUP / N_PIXELS)) - 1;
     if ( i != j ) {
       j = i;
       colorWipe(COLOR_ALCO_GO, 0, -1, j, true);
+#if DBG
+  Serial.print("checkAlco: ");
+  Serial.println(j);
+#endif
     }
   }
 }
@@ -206,6 +210,9 @@ void checkAlco() {
 void stopAlco() {
   digitalWrite(ALCO_BJT, LOW);
   bReadAlco = false;
+#if DBG
+  Serial.println("stopAlco");
+#endif
 }
 
 void stripOff() {
@@ -279,14 +286,18 @@ void alcoDown(int wait, int h) {
 
 int readAlco() {
   int alco = analogRead(ALCO_SENSOR);
-//#if DBG
-//  Serial.print("alco = ");
-//  Serial.println(alco);
-//#endif
+#if DBG
+  Serial.print("alco = ");
+  Serial.println(alco);
+#endif
   return alco;
 }
 
 void randomStrip(int wait, int index) {
+#if DBG
+  Serial.print("randomStrip: ");
+  Serial.println(index);
+#endif
   if ( index < 0 )
     index = random(0, strip.numPixels());
     
@@ -314,6 +325,10 @@ void randomStrip(int wait, int index) {
 }
 
 void rainbow(uint8_t wait) {
+#if DBG
+  Serial.print("rainbow: ");
+  Serial.println(j);
+#endif
   int i;   
   for (i=0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, Wheel((i + j) % NUM_RGB_COLORS));
@@ -328,6 +343,10 @@ void rainbow(uint8_t wait) {
 }
 
 void rainbowCycle(uint8_t wait) {
+#if DBG
+  Serial.print("rainbowCycle: ");
+  Serial.println(j);
+#endif
   int i;
   for (i=0; i < strip.numPixels(); i++) {
     // tricky math! we use each pixel as a fraction of the full NUM_RGB_COLORS-color wheel
@@ -348,6 +367,10 @@ void rainbowCycle(uint8_t wait) {
 // fill the dots one after the other with said color
 // good for testing purposes
 void colorWipe(uint16_t c, uint8_t wait, uint8_t start, uint8_t finish, boolean up) {
+#if DBG
+  Serial.print("colorWipe: ");
+  Serial.println(c);
+#endif
   if ( up ) {
     if ( start < 0 || start > strip.numPixels() ) 
       start = 0;
