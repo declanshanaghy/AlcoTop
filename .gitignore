@@ -9,3 +9,4 @@ AutoSave_*
 *.gcode
 *.s3g
 x*.png
+*.stl
