@@ -62,8 +62,7 @@ int clockPin = 3;      // 'green' wire
 // Set the first variable to the NUMBER of pixels. 20 = 20 pixels in a row
 
 LPD6803 strip = LPD6803(N_PIXELS, dataPin, clockPin);
-int alcoColors[N_PIXELS] = {
-  0};
+int alcoColors[N_PIXELS] = {0};
 
 boolean bIsAlco = false;
 boolean bAlcoUp = true;
@@ -118,7 +117,7 @@ void setup() {
 
   randomSeed(analogRead(UNCONNECTED_ANALOG));
 
-  for ( int i=0; i<strip.numPixels(); i++ )
+  for ( uint8_t i=0; i<strip.numPixels(); i++ )
     randomStrip(0, i);
 }
 
@@ -130,8 +129,9 @@ void loop() {
   int bRead = bMode.read();
 
   if (bRead == LOW && bLast == HIGH) {
-    // Button was clicked.    
-    mode = ++mode % MODE_MAX;    
+    // Button was clicked, increment mode and loop 
+    // around if max value is reached
+    ++mode %= MODE_MAX;
 #if DBG
     Serial.print("Mode chnaged to ");
     Serial.println(mode);
@@ -298,7 +298,7 @@ void stopAlco() {
 }
 
 void stripOff() {
-  for (int i=0; i < strip.numPixels(); i++) {
+  for (uint8_t i=0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, Color(31, 31, 0));
   }
   strip.show();
@@ -309,9 +309,9 @@ void calcAlcoColors() {
   int16_t step = NUM_COLORS / mid;
   if ( step == 0 )
     step = 1;
-  int16_t c = 0, r = 0, g = MAX_COLOR;
+  int16_t r = 0, g = MAX_COLOR;
 
-  for (int i=0; i < mid; i++) {
+  for (int8_t i=0; i < mid; i++) {
     //#if DBG    
     //  Serial.print("i="); Serial.print(i);
     //  Serial.print(", r="); Serial.print(r);
@@ -325,7 +325,7 @@ void calcAlcoColors() {
       r = MAX_COLOR;
   }
 
-  for (int i=mid; i < 20; i++) {
+  for (uint8_t i=mid; i < 20; i++) {
     //#if DBG    
     //  Serial.print("i="); Serial.print(i);
     //  Serial.print(", r="); Serial.print(r);
@@ -385,7 +385,7 @@ int readAlco() {
     alcoIndex = 0;
 
   int total = 0;
-  for (int i=0; i < ALCO_AVG_READINGS; i++)
+  for (uint8_t i=0; i < ALCO_AVG_READINGS; i++)
     total += alcoSamples[i];
 
   int avg = total / ALCO_AVG_READINGS;
@@ -409,7 +409,7 @@ void randomStrip(int wait, int index) {
   //  Serial.println(index);
   //#endif
 
-  int r, g, b = 0;
+  int r = 0, g = 0, b = 0;
   int mix = random(0, 2);
   switch ( mix ) {
   case 0:
@@ -437,8 +437,7 @@ void rainbow(uint8_t wait) {
   //  Serial.print("rainbow: ");
   //  Serial.println(j);
   //#endif
-  int i;   
-  for (i=0; i < strip.numPixels(); i++) {
+  for (uint8_t i=0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, Wheel((i + j) % NUM_RGB_COLORS));
   }  
   strip.show();   // write all the pixels out
@@ -455,8 +454,7 @@ void rainbowCycle(uint8_t wait) {
   //  Serial.print("rainbowCycle: ");
   //  Serial.println(j);
   //#endif
-  int i;
-  for (i=0; i < strip.numPixels(); i++) {
+  for (uint8_t i=0; i < strip.numPixels(); i++) {
     // tricky math! we use each pixel as a fraction of the full NUM_RGB_COLORS-color wheel
     // (thats the i / strip.numPixels() part)
     // Then add in j which makes the colors go around per pixel
@@ -519,14 +517,14 @@ void colorWipe(uint16_t c, uint8_t wait, uint8_t start, uint8_t finish, boolean 
 unsigned int Color(byte r, byte g, byte b)
 {
   //Take the lowest 5 bits of each value and append them end to end
-  return( ((unsigned int)g & 0x1F )<<10 | ((unsigned int)b & 0x1F)<<5 | (unsigned int)r & 0x1F);
+  return( (((unsigned int)g & 0x1F) << 10) | (((unsigned int)b & 0x1F) << 5) | ((unsigned int)r & 0x1F) );
 }
 
 //Input a value 0 to 127 to get a color value.
 //The colours are a transition r - g -b - back to r
 unsigned int Wheel(byte WheelPos)
 {
-  byte r, g, b;
+  byte r=0, g=0, b=0;
   switch(WheelPos >> COLOR_BITS)
   {
   case 0:
