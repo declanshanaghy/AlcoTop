@@ -8,7 +8,7 @@
 #define N_PIXELS 20
 
 #define ALCO_MIN_READ_ENABLE 180
-#define ALCO_MIN_TRIGGER 350
+#define ALCO_MIN_TRIGGER 500
 
 #define MQ3_MAX 1023
 #define DOUBLE_CLICK 1000
@@ -39,7 +39,7 @@
 #define GO_ALCO_SPEED 300
 #define GO_ALCO_PAUSE 500
 //Speed of the light flashes while waiting for a positive reading
-#define INDICATE_ALCO_SPEED 300
+#define INDICATE_ALCO_SPEED 350
 
 // Some colors
 #define COLOR_OFF Color(0, 0, 0)
@@ -73,11 +73,6 @@ uint32_t bLast = 0;
 uint32_t tChangeMode = 0;
 int32_t j = 0;
 uint8_t k = 0;
-
-#define ALCO_AVG_READINGS 20
-uint16_t alcoSamples[ALCO_AVG_READINGS] = {
-  0};
-uint16_t alcoIndex = 0;
 
 void setup() {
 #if DBG  
@@ -133,11 +128,12 @@ void loop() {
     // around if max value is reached
     ++mode %= MODE_MAX;
 #if DBG
-    Serial.print("Mode chnaged to ");
+    Serial.print("Mode changed to ");
     Serial.println(mode);
 #endif
-    tChangeMode = millis();
     j = 0;
+    tChangeMode = millis();
+    bIsAlco = false;
   }
 
   if ( mode % 2 == 1 ) {
@@ -185,6 +181,9 @@ void goAlco() {
 }
 
 boolean processAlco() {
+//#if DBG
+//  Serial.println("processAlco");
+//#endif
   int alco = bReadAlco ? readAlco() : 0;
 
   if ( alco < ALCO_MIN_TRIGGER ) {
@@ -203,29 +202,29 @@ boolean processAlco() {
       tChangeMode = millis();
     }
     int h = map(alco, 0, MQ3_MAX, 5, 20);
-    doAlco(h);    
+    showAlco(h);
   }
 
   return bIsAlco;
 }
 
 void indicateAlco() {
-  uint32_t elapsed = millis() - j;
+  uint32_t elapsed = millis() - tChangeMode;
 
-  //#if DBG
-  //  Serial.print("elapsed = ");
-  //  Serial.print(elapsed);
-  //  Serial.print("\tk = ");
-  //  Serial.println(k);
-  //#endif
+//#if DBG
+//  Serial.print("elapsed = ");
+//  Serial.print(elapsed);
+//  Serial.print("\tk = ");
+//  Serial.println(k);
+//#endif
 
   if ( elapsed < INDICATE_ALCO_SPEED / 2 ) {
     if ( k == 0 ) {
       colorWipe(COLOR_OFF, 0, -1, -1, false);
       k++;
-#if DBG
-      Serial.println("k == 0; k++");
-#endif
+//#if DBG
+//      Serial.println("k == 0; k++");
+//#endif
     }
   }
   else if ( elapsed < INDICATE_ALCO_SPEED ) {
@@ -256,7 +255,7 @@ void indicateAlco() {
     }
   }
   else if ( elapsed > INDICATE_ALCO_SPEED  * 6 ) {
-    j = millis();
+    tChangeMode = millis();
     k = 0;
     //#if DBG
     //  Serial.println("k = 0; reset");
@@ -266,10 +265,13 @@ void indicateAlco() {
 
 void checkAlco() {
   int alco = readAlco();
+//#if DBG
+//  Serial.print("checkAlco");
+//#endif
 
   if ( alco > ALCO_MIN_READ_ENABLE ) {
     bReadAlco = true;
-    j = millis();
+    tChangeMode = millis();
     k = 0;
 #if DBG
     Serial.println("bReadAlco = true");
@@ -280,10 +282,10 @@ void checkAlco() {
     if ( i != j ) {
       j = i;
       colorWipe(COLOR_ALCO_GO, 0, -1, j, true);
-      //#if DBG
-      //  Serial.print("checkAlco: ");
-      //  Serial.println(j);
-      //#endif
+//#if DBG
+//  Serial.print("checkAlco: ");
+//  Serial.println(j);
+//#endif
       delay(50);
     }
   }
@@ -312,11 +314,11 @@ void calcAlcoColors() {
   int16_t r = 0, g = MAX_COLOR;
 
   for (int8_t i=0; i < mid; i++) {
-    //#if DBG    
-    //  Serial.print("i="); Serial.print(i);
-    //  Serial.print(", r="); Serial.print(r);
-    //  Serial.print(", g="); Serial.println(g);
-    //#endif
+//#if DBG    
+//  Serial.print("i="); Serial.print(i);
+//  Serial.print(", r="); Serial.print(r);
+//  Serial.print(", g="); Serial.println(g);
+//#endif
 
     alcoColors[i] = Color(r, g, 0);    
 
@@ -326,11 +328,11 @@ void calcAlcoColors() {
   }
 
   for (uint8_t i=mid; i < 20; i++) {
-    //#if DBG    
-    //  Serial.print("i="); Serial.print(i);
-    //  Serial.print(", r="); Serial.print(r);
-    //  Serial.print(", g="); Serial.println(g);
-    //#endif
+//#if DBG    
+//  Serial.print("i="); Serial.print(i);
+//  Serial.print(", r="); Serial.print(r);
+//  Serial.print(", g="); Serial.println(g);
+//#endif
 
     alcoColors[i] = Color(r, g, 0);    
 
@@ -340,17 +342,23 @@ void calcAlcoColors() {
   }
 }
 
-void doAlco(int h) {
+void showAlco(int h) {
   long elapsed = millis() - tChangeMode;
   int perPixel = GO_ALCO_SPEED / h;
 
   if ( elapsed >  perPixel ) {
-    //#if DBG
-    //  Serial.print("elapsed = ");
-    //  Serial.println(elapsed);
-    //  Serial.print("perPixel = ");
-    //  Serial.println(perPixel);
-    //#endif
+//#if DBG
+//  Serial.print("elapsed = ");
+//  Serial.println(elapsed);
+//  Serial.print("perPixel = ");
+//  Serial.println(perPixel);
+//#endif
+//#if DBG
+//  Serial.print("bAlcoUp = ");
+//  Serial.println(bAlcoUp);
+//  Serial.print("j = ");
+//  Serial.println(j);
+//#endif
 
     if ( bAlcoUp ) {
       // Pause at the top
@@ -379,25 +387,14 @@ void doAlco(int h) {
 
 int readAlco() {
   int alco = analogRead(ALCO_SENSOR);
-  alcoSamples[alcoIndex] = alco;
-
-  if ( ++alcoIndex > ALCO_AVG_READINGS )
-    alcoIndex = 0;
-
-  int total = 0;
-  for (uint8_t i=0; i < ALCO_AVG_READINGS; i++)
-    total += alcoSamples[i];
-
-  int avg = total / ALCO_AVG_READINGS;
 
 #if DBG
   Serial.print("alco = ");
-  Serial.print(alco);
-  Serial.print(",\tavg = ");
-  Serial.println(avg);
+  Serial.println(alco);
+  delay(25);
 #endif
-
-  return avg;
+ 
+  return alco;
 }
 
 void randomStrip(int wait, int index) {
