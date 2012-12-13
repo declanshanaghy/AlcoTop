@@ -5,10 +5,9 @@
 
 #define DBG 0
 
-#define T_TOTAL 500
 #define N_PIXELS 20
 
-#define ALCO_MIN_READ_ENABLE 150
+#define ALCO_MIN_READ_ENABLE 180
 #define ALCO_MIN_TRIGGER 350
 
 #define MQ3_MAX 1023
@@ -36,7 +35,10 @@
 //Slows down the rainbow when there are more bits in the colors
 #define RAINBOW_SPEED 100 + ((5 - COLOR_BITS) * 25) 
 #define RANDOM_SPEED 150
-#define GO_ALCO_SPEED 25
+//Speed of the light wipe after a positive alcohol reading
+#define GO_ALCO_SPEED 300
+#define GO_ALCO_PAUSE 500
+//Speed of the light flashes while waiting for a positive reading
 #define INDICATE_ALCO_SPEED 300
 
 // Some colors
@@ -60,19 +62,22 @@ int clockPin = 3;      // 'green' wire
 // Set the first variable to the NUMBER of pixels. 20 = 20 pixels in a row
 
 LPD6803 strip = LPD6803(N_PIXELS, dataPin, clockPin);
-int alcoColors[N_PIXELS] = {0};
+int alcoColors[N_PIXELS] = {
+  0};
 
 boolean bIsAlco = false;
+boolean bAlcoUp = true;
 boolean bReadAlco = false;
 Bounce bMode = Bounce(B_MODE, 5);
 uint8_t mode = 0;
 uint32_t bLast = 0;
 uint32_t tChangeMode = 0;
-uint32_t j = 0;
+int32_t j = 0;
 uint8_t k = 0;
 
-#define ALCO_AVG_READINGS 5
-uint16_t alcoSamples[ALCO_AVG_READINGS] = {0};
+#define ALCO_AVG_READINGS 20
+uint16_t alcoSamples[ALCO_AVG_READINGS] = {
+  0};
 uint16_t alcoIndex = 0;
 
 void setup() {
@@ -82,9 +87,12 @@ void setup() {
   Serial.println("===================================");
   Serial.println("       IMPORTANT SETTINGS          ");
   Serial.println("===================================");
-  Serial.print("ALCO_MIN_TRIGGER: "); Serial.println(ALCO_MIN_TRIGGER);
-  Serial.print("DOUBLE_CLICK: "); Serial.println(DOUBLE_CLICK);
-  Serial.print("MAX_COLOR: "); Serial.println(MAX_COLOR);
+  Serial.print("ALCO_MIN_TRIGGER: "); 
+  Serial.println(ALCO_MIN_TRIGGER);
+  Serial.print("DOUBLE_CLICK: "); 
+  Serial.println(DOUBLE_CLICK);
+  Serial.print("MAX_COLOR: "); 
+  Serial.println(MAX_COLOR);
 #endif
 
   // The Arduino needs to clock out the data to the pixels
@@ -94,13 +102,13 @@ void setup() {
   // especially with strands of over 100 dots.
   // (Note that the max is 'pessimistic', its probably 10% or 20% less in reality)  
   strip.setCPUmax(75);  // start with 50% CPU usage. up this if the strand flickers or is slow
-  
+
   // Start up the LED counter
   strip.begin();
 
   calcAlcoColors();
   stripOff();
-  
+
   pinMode(INDICATOR_LED, OUTPUT); 
   pinMode(ALCO_BJT, OUTPUT); 
   pinMode(ALCO_SENSOR, INPUT); 
@@ -109,46 +117,24 @@ void setup() {
   (mode % 2 == 1) ? goAlco() : stopAlco();
 
   randomSeed(analogRead(UNCONNECTED_ANALOG));
-  
+
   for ( int i=0; i<strip.numPixels(); i++ )
     randomStrip(0, i);
 }
 
 
 void loop() {
-  int alco = bReadAlco ? readAlco() : 0;
-  
-  if ( alco < ALCO_MIN_TRIGGER ) {
-    if ( bIsAlco ) {
-      digitalWrite(INDICATOR_LED, LOW);
-      //colorWipe(COLOR_ALCO_GO, GO_ALCO_SPEED, -1, -1, true);
-    }
-    loopMode();
-    bIsAlco = false;
-  }
-  else {
-    if ( ! bIsAlco ) {
-      digitalWrite(INDICATOR_LED, HIGH);
-      colorWipe(COLOR_OFF, 0, -1, -1, false);
-    }
-    int h = map(alco, 0, MQ3_MAX, 5, 20);
-    doAlco(h);    
-    bIsAlco = true;
-  }
-}
-
-void loopMode() {
   bMode.update ();
   uint8_t oldMode = mode;
-  
+
   int bRead = bMode.read();
-  
+
   if (bRead == LOW && bLast == HIGH) {
     // Button was clicked.    
     mode = ++mode % MODE_MAX;    
 #if DBG
-  Serial.print("Mode chnaged to ");
-  Serial.println(mode);
+    Serial.print("Mode chnaged to ");
+    Serial.println(mode);
 #endif
     tChangeMode = millis();
     j = 0;
@@ -162,29 +148,30 @@ void loopMode() {
       checkAlco();
     }
     else {
-      indicateAlco();
+      if ( !processAlco() )
+        indicateAlco();
     }
   }
   else {
     switch (mode) {
-      case MODE_RANDOM:
-        randomStrip(RANDOM_SPEED, -1);    
-        if ( oldMode != mode )
-          stopAlco();
-        break;
-      case MODE_RAINBOW:
-        rainbow(RAINBOW_SPEED);
-        if ( oldMode != mode )
-          stopAlco();
-        break;
-      case MODE_RAINBOWCYCLE:
-        rainbowCycle(RAINBOW_SPEED);
-        if ( oldMode != mode )
-          stopAlco();
-        break;
+    case MODE_RANDOM:
+      randomStrip(RANDOM_SPEED, -1);    
+      if ( oldMode != mode )
+        stopAlco();
+      break;
+    case MODE_RAINBOW:
+      rainbow(RAINBOW_SPEED);
+      if ( oldMode != mode )
+        stopAlco();
+      break;
+    case MODE_RAINBOWCYCLE:
+      rainbowCycle(RAINBOW_SPEED);
+      if ( oldMode != mode )
+        stopAlco();
+      break;
     }
   }
-  
+
   bLast = bRead;
 }
 
@@ -197,22 +184,47 @@ void goAlco() {
 #endif
 }
 
+boolean processAlco() {
+  int alco = bReadAlco ? readAlco() : 0;
+
+  if ( alco < ALCO_MIN_TRIGGER ) {
+    if ( bIsAlco ) {
+      digitalWrite(INDICATOR_LED, LOW);
+      bIsAlco = false;
+    }
+  }
+  else {
+    if ( ! bIsAlco ) {
+      digitalWrite(INDICATOR_LED, HIGH);
+      colorWipe(COLOR_OFF, 0, -1, -1, false);
+      bIsAlco = true;
+      bAlcoUp = true;
+      j = 0;
+      tChangeMode = millis();
+    }
+    int h = map(alco, 0, MQ3_MAX, 5, 20);
+    doAlco(h);    
+  }
+
+  return bIsAlco;
+}
+
 void indicateAlco() {
   uint32_t elapsed = millis() - j;
-  
-#if DBG
-  Serial.print("elapsed = ");
-  Serial.print(elapsed);
-  Serial.print("\tk = ");
-  Serial.println(k);
-#endif
-  
+
+  //#if DBG
+  //  Serial.print("elapsed = ");
+  //  Serial.print(elapsed);
+  //  Serial.print("\tk = ");
+  //  Serial.println(k);
+  //#endif
+
   if ( elapsed < INDICATE_ALCO_SPEED / 2 ) {
     if ( k == 0 ) {
       colorWipe(COLOR_OFF, 0, -1, -1, false);
       k++;
 #if DBG
-  Serial.println("k == 0; k++");
+      Serial.println("k == 0; k++");
 #endif
     }
   }
@@ -220,47 +232,47 @@ void indicateAlco() {
     if ( k == 1 ) {
       colorWipe(COLOR_ALCO_GO, 0, -1, -1, false);
       k++;
-//#if DBG
-//  Serial.println("k == 1; k++");
-//#endif
+      //#if DBG
+      //  Serial.println("k == 1; k++");
+      //#endif
     }
   }
   else if ( elapsed < INDICATE_ALCO_SPEED  * 1.5 ) {
     if ( k == 2 ) {
       colorWipe(COLOR_OFF, 0, -1, -1, false);
       k++;
-//#if DBG
-//  Serial.println("k == 2; k++");
-//#endif
+      //#if DBG
+      //  Serial.println("k == 2; k++");
+      //#endif
     }
   }
   else if ( elapsed < INDICATE_ALCO_SPEED  * 2 ) {
     if ( k == 3 ) {
       colorWipe(COLOR_ALCO_GO, 0, -1, -1, false);
       k++;
-//#if DBG
-//  Serial.println("k == 3; k++");
-//#endif
+      //#if DBG
+      //  Serial.println("k == 3; k++");
+      //#endif
     }
   }
   else if ( elapsed > INDICATE_ALCO_SPEED  * 6 ) {
     j = millis();
     k = 0;
-//#if DBG
-//  Serial.println("k = 0; reset");
-//#endif
+    //#if DBG
+    //  Serial.println("k = 0; reset");
+    //#endif
   }
 }
 
 void checkAlco() {
   int alco = readAlco();
-  
+
   if ( alco > ALCO_MIN_READ_ENABLE ) {
     bReadAlco = true;
     j = millis();
     k = 0;
 #if DBG
-  Serial.println("bReadAlco = true");
+    Serial.println("bReadAlco = true");
 #endif
   }
   else {
@@ -268,10 +280,10 @@ void checkAlco() {
     if ( i != j ) {
       j = i;
       colorWipe(COLOR_ALCO_GO, 0, -1, j, true);
-#if DBG
-  Serial.print("checkAlco: ");
-  Serial.println(j);
-#endif
+      //#if DBG
+      //  Serial.print("checkAlco: ");
+      //  Serial.println(j);
+      //#endif
       delay(50);
     }
   }
@@ -298,30 +310,30 @@ void calcAlcoColors() {
   if ( step == 0 )
     step = 1;
   int16_t c = 0, r = 0, g = MAX_COLOR;
-  
+
   for (int i=0; i < mid; i++) {
-//#if DBG    
-//  Serial.print("i="); Serial.print(i);
-//  Serial.print(", r="); Serial.print(r);
-//  Serial.print(", g="); Serial.println(g);
-//#endif
-    
+    //#if DBG    
+    //  Serial.print("i="); Serial.print(i);
+    //  Serial.print(", r="); Serial.print(r);
+    //  Serial.print(", g="); Serial.println(g);
+    //#endif
+
     alcoColors[i] = Color(r, g, 0);    
-    
+
     r += step;
     if ( r > MAX_COLOR )
       r = MAX_COLOR;
   }
-    
+
   for (int i=mid; i < 20; i++) {
-//#if DBG    
-//  Serial.print("i="); Serial.print(i);
-//  Serial.print(", r="); Serial.print(r);
-//  Serial.print(", g="); Serial.println(g);
-//#endif
-    
+    //#if DBG    
+    //  Serial.print("i="); Serial.print(i);
+    //  Serial.print(", r="); Serial.print(r);
+    //  Serial.print(", g="); Serial.println(g);
+    //#endif
+
     alcoColors[i] = Color(r, g, 0);    
-    
+
     g -= step;
     if ( g < 0 )
       g = 0;      
@@ -329,50 +341,61 @@ void calcAlcoColors() {
 }
 
 void doAlco(int h) {
-  int t_wait = T_TOTAL / h; 
-  
-  alcoUp(t_wait, h);
-  delay(T_TOTAL);
-  alcoDown(t_wait, h);
-}
+  long elapsed = millis() - tChangeMode;
+  int perPixel = GO_ALCO_SPEED / h;
 
-void alcoUp(int wait, int h) {
-  int d_wipe = 50;
-  
-  for (int i=0; i < h; i++) {
-    strip.setPixelColor(i, alcoColors[i]);
-    strip.show();
-    delay(wait);
-  }
-}
+  if ( elapsed >  perPixel ) {
+    //#if DBG
+    //  Serial.print("elapsed = ");
+    //  Serial.println(elapsed);
+    //  Serial.print("perPixel = ");
+    //  Serial.println(perPixel);
+    //#endif
 
-void alcoDown(int wait, int h) {
-  for (int i=h-1; i >= 0; i--) {
-    strip.setPixelColor(i, COLOR_OFF);
-    strip.show();
-    delay(wait);
+    if ( bAlcoUp ) {
+      // Pause at the top
+      if ( j == h + 1 ) {
+        if ( elapsed >  GO_ALCO_PAUSE ) {
+          bAlcoUp = false;
+          tChangeMode = millis();
+        }        
+      }
+      else {
+        strip.setPixelColor(j, alcoColors[j]);
+        strip.show();
+
+        tChangeMode = millis();
+        bAlcoUp = j++ <= h;
+      }
+    }
+    else {
+      strip.setPixelColor(j, COLOR_OFF);
+      strip.show();
+      bAlcoUp = j-- < 0;
+      tChangeMode = millis();      
+    }    
   }
 }
 
 int readAlco() {
   int alco = analogRead(ALCO_SENSOR);
   alcoSamples[alcoIndex] = alco;
-  
+
   if ( ++alcoIndex > ALCO_AVG_READINGS )
     alcoIndex = 0;
-    
+
   int total = 0;
   for (int i=0; i < ALCO_AVG_READINGS; i++)
     total += alcoSamples[i];
-    
+
   int avg = total / ALCO_AVG_READINGS;
-  
-//#if DBG
-//  Serial.print("alco = ");
-//  Serial.print(alco);
-//  Serial.print(",\tavg = ");
-//  Serial.println(avg);
-//#endif
+
+#if DBG
+  Serial.print("alco = ");
+  Serial.print(alco);
+  Serial.print(",\tavg = ");
+  Serial.println(avg);
+#endif
 
   return avg;
 }
@@ -380,29 +403,29 @@ int readAlco() {
 void randomStrip(int wait, int index) {
   if ( index < 0 )
     index = random(0, strip.numPixels());
-    
-//#if DBG
-//  Serial.print("randomStrip: ");
-//  Serial.println(index);
-//#endif
+
+  //#if DBG
+  //  Serial.print("randomStrip: ");
+  //  Serial.println(index);
+  //#endif
 
   int r, g, b = 0;
   int mix = random(0, 2);
   switch ( mix ) {
-    case 0:
-      r = random(0, MAX_COLOR);
-      g = random(0, MAX_COLOR);
-      break;
-    case 1:
-      g = random(0, MAX_COLOR);
-      b = random(0, MAX_COLOR);
-      break;
-    case 2:
-      r = random(0, MAX_COLOR);
-      b = random(0, MAX_COLOR);
-      break;
+  case 0:
+    r = random(0, MAX_COLOR);
+    g = random(0, MAX_COLOR);
+    break;
+  case 1:
+    g = random(0, MAX_COLOR);
+    b = random(0, MAX_COLOR);
+    break;
+  case 2:
+    r = random(0, MAX_COLOR);
+    b = random(0, MAX_COLOR);
+    break;
   }
-  
+
   strip.setPixelColor(index, Color(r, g, b));
   strip.show();
   if ( wait > 0 )
@@ -410,10 +433,10 @@ void randomStrip(int wait, int index) {
 }
 
 void rainbow(uint8_t wait) {
-//#if DBG
-//  Serial.print("rainbow: ");
-//  Serial.println(j);
-//#endif
+  //#if DBG
+  //  Serial.print("rainbow: ");
+  //  Serial.println(j);
+  //#endif
   int i;   
   for (i=0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, Wheel((i + j) % NUM_RGB_COLORS));
@@ -428,10 +451,10 @@ void rainbow(uint8_t wait) {
 }
 
 void rainbowCycle(uint8_t wait) {
-//#if DBG
-//  Serial.print("rainbowCycle: ");
-//  Serial.println(j);
-//#endif
+  //#if DBG
+  //  Serial.print("rainbowCycle: ");
+  //  Serial.println(j);
+  //#endif
   int i;
   for (i=0; i < strip.numPixels(); i++) {
     // tricky math! we use each pixel as a fraction of the full NUM_RGB_COLORS-color wheel
@@ -442,7 +465,7 @@ void rainbowCycle(uint8_t wait) {
   }  
   strip.show();   // write all the pixels out
   delay(wait);
-  
+
   if ( j++ > NUM_RGB_COLORS * 5 ) {
     // 5 cycles of all NUM_RGB_COLORS colors in the wheel
     j = 0;    
@@ -452,22 +475,22 @@ void rainbowCycle(uint8_t wait) {
 // fill the dots one after the other with said color
 // good for testing purposes
 void colorWipe(uint16_t c, uint8_t wait, uint8_t start, uint8_t finish, boolean up) {
-//#if DBG
-//  Serial.print("colorWipe: ");
-//  Serial.println(c);
-//#endif
+  //#if DBG
+  //  Serial.print("colorWipe: ");
+  //  Serial.println(c);
+  //#endif
   if ( up ) {
     if ( start < 0 || start > strip.numPixels() ) 
       start = 0;
     if ( finish < 0 || finish > strip.numPixels() ) 
       finish = strip.numPixels();
-  
+
     for (int i=start; i < finish; i++) {
-        strip.setPixelColor(i, c);
-        if ( wait > 0 ) {
-          strip.show();
-          delay(wait);
-        }
+      strip.setPixelColor(i, c);
+      if ( wait > 0 ) {
+        strip.show();
+        delay(wait);
+      }
     }
   }
   else {
@@ -475,16 +498,16 @@ void colorWipe(uint16_t c, uint8_t wait, uint8_t start, uint8_t finish, boolean 
       start = strip.numPixels() - 1;
     if ( finish < 0 || finish > strip.numPixels() - 1 )
       finish = 0;
-  
+
     for (int i=start; i >= finish; i--) {
-        strip.setPixelColor(i, c);
-        if ( wait > 0 ) {
-          strip.show();
-          delay(wait);
-        }
+      strip.setPixelColor(i, c);
+      if ( wait > 0 ) {
+        strip.show();
+        delay(wait);
+      }
     }
   }
-  
+
   if ( wait == 0 ) {
     strip.show();
   }
@@ -506,22 +529,23 @@ unsigned int Wheel(byte WheelPos)
   byte r, g, b;
   switch(WheelPos >> COLOR_BITS)
   {
-    case 0:
-      r = MAX_COLOR - WheelPos % NUM_COLORS;   //Red down
-      g = WheelPos % NUM_COLORS;      // Green up
-      b = 0;                  //blue off
-      break; 
-    case 1:
-      g = MAX_COLOR - WheelPos % NUM_COLORS;  //green down
-      b = WheelPos % NUM_COLORS;      //blue up
-      r = 0;                  //red off
-      break; 
-    case 2:
-      b = MAX_COLOR - WheelPos % NUM_COLORS;  //blue down 
-      r = WheelPos % NUM_COLORS;      //red up
-      g = 0;                  //green off
-      break; 
+  case 0:
+    r = MAX_COLOR - WheelPos % NUM_COLORS;   //Red down
+    g = WheelPos % NUM_COLORS;      // Green up
+    b = 0;                  //blue off
+    break; 
+  case 1:
+    g = MAX_COLOR - WheelPos % NUM_COLORS;  //green down
+    b = WheelPos % NUM_COLORS;      //blue up
+    r = 0;                  //red off
+    break; 
+  case 2:
+    b = MAX_COLOR - WheelPos % NUM_COLORS;  //blue down 
+    r = WheelPos % NUM_COLORS;      //red up
+    g = 0;                  //green off
+    break; 
   }
   return(Color(r,g,b));
 }
+
 
