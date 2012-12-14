@@ -3,12 +3,12 @@
 #include <TimerOne.h>
 #include "LPD6803.h"
 
-#define DBG 0
+#define DBG 1
 
 #define N_PIXELS 20
 
-#define ALCO_MIN_READ_ENABLE 180
-#define ALCO_MIN_TRIGGER 500
+#define ALCO_MIN_READ_ENABLE 200
+#define ALCO_MIN_TRIGGER 400
 
 #define MQ3_MAX 1023
 #define DOUBLE_CLICK 1000
@@ -24,7 +24,7 @@
 #define MODE_MAX 6
 
 //Number of bits used to represent a color
-#define COLOR_BITS 4
+#define COLOR_BITS 3
 //Number of color values of a single color
 #define NUM_COLORS (1 << COLOR_BITS)
 //Max color value 0 indexed
