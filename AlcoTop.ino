@@ -8,7 +8,7 @@
 #define N_PIXELS 20
 
 #define ALCO_MIN_READ_ENABLE 200
-#define ALCO_MIN_TRIGGER 400
+#define ALCO_MIN_TRIGGER 500
 
 #define MQ3_MAX 1023
 #define DOUBLE_CLICK 1000
