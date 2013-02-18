@@ -3929,7 +3929,7 @@ We've spent an enormous amount of time creating and checking these footprints an
 <part name="GND6" library="SparkFun" deviceset="GND" device=""/>
 <part name="P+5" library="SparkFun" deviceset="VCC" device=""/>
 <part name="P+6" library="SparkFun" deviceset="VCC" device=""/>
-<part name="R4" library="Dek" deviceset="RESISTOR" device="AXIAL-0.3" value="10K"/>
+<part name="R4" library="Dek" deviceset="RESISTOR" device="AXIAL-0.3" value="1K"/>
 <part name="MODE" library="Dek" deviceset="M02" device="LOCK_LONGPADS"/>
 <part name="R5" library="Dek" deviceset="RESISTOR" device="AXIAL-0.3" value="10K"/>
 <part name="GND8" library="SparkFun" deviceset="GND" device=""/>

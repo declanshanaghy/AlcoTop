@@ -7,8 +7,8 @@
 
 #define N_PIXELS 20
 
-#define ALCO_MIN_READ_ENABLE 200
-#define ALCO_MIN_TRIGGER 500
+#define ALCO_MIN_READ_ENABLE 50
+#define ALCO_MIN_TRIGGER 200
 
 #define MQ3_MAX 1023
 #define DOUBLE_CLICK 1000
@@ -44,19 +44,20 @@
 // Some colors
 #define COLOR_OFF Color(0, 0, 0)
 #define COLOR_ALCO_WAIT Color(MAX_COLOR, 0, 0)
-#define COLOR_ALCO_GO Color(0, 0, MAX_COLOR)
+#define COLOR_ALCO_BUILDUP Color(MAX_COLOR, MAX_COLOR, 0)
+#define COLOR_ALCO_GO Color(0, MAX_COLOR, 0)
 
 //IO Pins
-#define INDICATOR_LED 7
+#define INDICATOR_LED 3
 #define ALCO_BJT 12
 #define ALCO_SENSOR A0
-#define B_MODE A5
-#define UNCONNECTED_ANALOG A3
+#define B_MODE 2
+#define UNCONNECTED_ANALOG A5
 
 // Choose which 2 pins you will use for output.
 // Can be any valid output pins.
-int dataPin = 2;       // 'yellow' wire
-int clockPin = 3;      // 'green' wire
+int dataPin = 7;       // 'yellow' wire
+int clockPin = 8;      // 'green' wire
 
 // Timer 1 is also used by the strip to send pixel clocks
 // Set the first variable to the NUMBER of pixels. 20 = 20 pixels in a row
@@ -281,7 +282,7 @@ void checkAlco() {
     int i = map(alco, 0, ALCO_MIN_READ_ENABLE, 0, 20);
     if ( i != j ) {
       j = i;
-      colorWipe(COLOR_ALCO_GO, 0, -1, j, true);
+      colorWipe(COLOR_ALCO_BUILDUP, 0, -1, j, true);
 //#if DBG
 //  Serial.print("checkAlco: ");
 //  Serial.println(j);
