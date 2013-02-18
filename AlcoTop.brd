@@ -114,9 +114,9 @@
 <wire x1="51.74" y1="73.65" x2="0" y2="73.65" width="0" layer="20"/>
 <wire x1="0" y1="73.65" x2="0" y2="0" width="0" layer="20"/>
 <circle x="35.56" y="21.59" radius="8.89" width="0.254" layer="21"/>
-<text x="3.048" y="35.687" size="1.778" layer="21" font="vector" ratio="15">AlcoTop v1.0</text>
+<text x="3.048" y="35.687" size="1.778" layer="21" font="vector" ratio="15">AlcoTop v1.1</text>
 <text x="5.715" y="33.02" size="1.778" layer="21" font="vector" ratio="15">Jan 2013</text>
-<text x="46.228" y="7.747" size="1.778" layer="22" font="vector" ratio="15" rot="MR0">AlcoTop v1.0</text>
+<text x="46.228" y="7.747" size="1.778" layer="22" font="vector" ratio="15" rot="MR0">AlcoTop v1.1</text>
 <text x="43.815" y="5.08" size="1.778" layer="22" font="vector" ratio="15" rot="MR0">Jan 2013</text>
 </plain>
 <libraries>
