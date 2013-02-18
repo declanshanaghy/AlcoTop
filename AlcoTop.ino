@@ -5,24 +5,17 @@
 
 #define DBG 1
 
-#define N_PIXELS 20
+// Thresholds
+#define ALCO_MIN_READ_ENABLE 75
+#define ALCO_MIN_TRIGGER 250
 
-#define ALCO_MIN_READ_ENABLE 50
-#define ALCO_MIN_TRIGGER 200
+//Absolute max that the sensor can reach when doused with isopropyl alcohol
+#define MQ3_ABS_MAX 950  
+// % of absolute max to use for scaling breath readings to the # of pixels
+#define SCALE_READINGS 75
+#define MQ3_MAX (MQ3_ABS_MAX / 100) * SCALE_READINGS
 
-#define MQ3_MAX 1023
-#define DOUBLE_CLICK 1000
-
-//Even modes are light displays
-#define MODE_RANDOM 0
-#define MODE_RAINBOW 2
-#define MODE_RAINBOWCYCLE 4
-
-//All odd modes turn on the sensor
-#define MODE_ALCO 1
-
-#define MODE_MAX 6
-
+// Colors & speeeeeeds
 //Number of bits used to represent a color
 #define COLOR_BITS 3
 //Number of color values of a single color
@@ -36,7 +29,7 @@
 #define RAINBOW_SPEED 100 + ((5 - COLOR_BITS) * 25) 
 #define RANDOM_SPEED 150
 //Speed of the light wipe after a positive alcohol reading
-#define GO_ALCO_SPEED 300
+#define GO_ALCO_SPEED 500
 #define GO_ALCO_PAUSE 500
 //Speed of the light flashes while waiting for a positive reading
 #define INDICATE_ALCO_SPEED 350
@@ -44,7 +37,7 @@
 // Some colors
 #define COLOR_OFF Color(0, 0, 0)
 #define COLOR_ALCO_WAIT Color(MAX_COLOR, 0, 0)
-#define COLOR_ALCO_BUILDUP Color(MAX_COLOR, MAX_COLOR, 0)
+#define COLOR_ALCO_BUILDUP Color(MAX_COLOR, 0, MAX_COLOR)
 #define COLOR_ALCO_GO Color(0, MAX_COLOR, 0)
 
 //IO Pins
@@ -53,6 +46,17 @@
 #define ALCO_SENSOR A0
 #define B_MODE 2
 #define UNCONNECTED_ANALOG A5
+
+#define N_PIXELS 20
+
+//Even modes are light displays
+#define MODE_RANDOM 0
+#define MODE_RAINBOW 2
+#define MODE_RAINBOWCYCLE 4
+
+//All odd modes turn on the sensor
+#define MODE_ALCO 1
+#define MODE_MAX 6
 
 // Choose which 2 pins you will use for output.
 // Can be any valid output pins.
@@ -78,16 +82,7 @@ uint8_t k = 0;
 void setup() {
 #if DBG  
   Serial.begin(115200);
-  Serial.println("AlcoTop welcomes u, merry drinking!");
-  Serial.println("===================================");
-  Serial.println("       IMPORTANT SETTINGS          ");
-  Serial.println("===================================");
-  Serial.print("ALCO_MIN_TRIGGER: "); 
-  Serial.println(ALCO_MIN_TRIGGER);
-  Serial.print("DOUBLE_CLICK: "); 
-  Serial.println(DOUBLE_CLICK);
-  Serial.print("MAX_COLOR: "); 
-  Serial.println(MAX_COLOR);
+  Serial.println("Merry drinking!");
 #endif
 
   // The Arduino needs to clock out the data to the pixels
